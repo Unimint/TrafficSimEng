@@ -12,23 +12,29 @@ type Graph struct {
 	roads []Road
 }
 
-func (g *Graph) graphFromCSV(fname string) error {
-
+// graphFromCSV initializes the Graph structure using the data extracted from the csv file
+// all roads are unidirectional by default, so there is no check for directionality
+func (g *Graph) graphFromCSV(fname string) (*map[int]int, error) {
 	file, err := os.Open(fname)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer file.Close()
+
 	reader := csv.NewReader(bufio.NewReader(file))
 
 	reader.Comma = ';'
 
 	_, err = reader.Read()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	//  road id
+	// road id
 	i := 1
+
+	// define a list of generations
+	list := make(map[int]int)
 
 	for {
 		line, err := reader.Read()
@@ -37,23 +43,28 @@ func (g *Graph) graphFromCSV(fname string) error {
 		}
 
 		// source vertex ID
-		fv_id, err := strconv.Atoi(line[0])
+		sv_id, err := strconv.Atoi(line[0])
 		if err != nil {
-			return err
+			return nil, err
 		}
+
 		// target vertex ID
 		tv_id, err := strconv.Atoi(line[1])
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		// line[2] contains direction
-		// all roads are unidirectional by default, so there is no check for directionality
-
-		// the weight of the road as a number of cells
-		w, err := strconv.Atoi(line[3])
+		// the number of generated cars at the roads source vertex
+		n, err := strconv.Atoi(line[2])
 		if err != nil {
-			return err
+			return nil, err
+		}
+		list[i] = n
+
+		// the weight of the road
+		w, err := strconv.ParseFloat(line[3], 64)
+		if err != nil {
+			return nil, err
 		}
 
 		var light Light
@@ -61,19 +72,19 @@ func (g *Graph) graphFromCSV(fname string) error {
 		// traffic light at the end of the road
 		l, err := strconv.ParseBool(line[4])
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if l {
 			// the green traffic light time in seconds
 			gl, err := strconv.Atoi(line[5])
 			if err != nil {
-				return err
+				return nil, err
 			}
 			//the red traffic light time in seconds
 			rl, err := strconv.Atoi(line[6])
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			light = Light{green: gl, red: rl}
@@ -81,23 +92,19 @@ func (g *Graph) graphFromCSV(fname string) error {
 
 		// array of available neighbors
 		neighbors := []int{}
+		//start from the eighth value
 		j := 7
 
 		for line[j] != "" {
 			neighbor, err := strconv.Atoi(line[j])
 			if err != nil {
-				return err
+				return nil, err
 			}
 			neighbors = append(neighbors, neighbor)
 			j++
 		}
-		g.roads = append(g.roads, Road{id: i, source: fv_id, target: tv_id, weight: w, next: neighbors, light: light})
+		g.roads = append(g.roads, Road{id: i, source: sv_id, target: tv_id, weight: w, light: light, next: neighbors})
 		i++
 	}
-	err = file.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return &list, file.Close()
 }
